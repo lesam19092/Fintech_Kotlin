@@ -8,11 +8,11 @@ suspend fun main(args: Array<String>) {
 
 
     val kudoService = KudoService()
-    val newsList = kudoService.getNews(75)
-    val period = LocalDate.of(2023, 9, 1)..LocalDate.of(2024, 9, 15)
-    val mostRatedNews = kudoService.getMostRatedNews(20, period, newsList)
+    val newsList = kudoService.getNews(1000)
+    val period = LocalDate.of(2022, 9, 1)..LocalDate.of(2024, 9, 15)
+    val mostRatedNews = kudoService.getMostRatedNews(77, period, newsList)
     DSL(mostRatedNews)
-    kudoService.saveNews(("C:\\Users\\danil\\Desktop\\Fintech_kotlin\\src\\main\\resources\\save.csv"), mostRatedNews)
+    kudoService.saveNews(("save.csv"), mostRatedNews)
 
 }
 

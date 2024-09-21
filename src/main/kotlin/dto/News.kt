@@ -4,6 +4,7 @@ import dto.serializer.URISerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import java.net.URI
+import kotlin.math.exp
 
 @Serializable
 data class News(
@@ -19,10 +20,16 @@ data class News(
     @SerialName("siteUrl") val siteUrl: URI? = null,
     @SerialName("favorites_count") val favoritesCount: Int? = null,
     @SerialName("comments_count") val commentsCount: Int? = null,
-    val rating: Double? = null
 
 
-)
+    ) {
+    val rating: Double by lazy {
+        calculateRating(favoritesCount!!, commentsCount!!)
+    }
+
+    private fun calculateRating(favoritesCount: Int, commentsCount: Int): Double =
+        1 / (1 + exp(-(favoritesCount.toDouble() / (commentsCount + 1))))
+}
 
 
 

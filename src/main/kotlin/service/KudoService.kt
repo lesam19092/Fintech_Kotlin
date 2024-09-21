@@ -13,6 +13,7 @@ import org.slf4j.LoggerFactory
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Paths
+import java.nio.file.StandardOpenOption
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -32,7 +33,11 @@ class KudoService {
     }
 
     private val baseUrl =
-        "https://kudago.com/public-api/v1.4/news/?fields=id,title,slug,description,publication_date,favorites_count,comments_count&expand=&order_by=&text_format=text&ids=&location=&actual_only=true"
+        "https://kudago.com/public-api/v1.4/" +
+                "news/?fields=id,title,slug," +
+                "description,publication_date,favorites_count," +
+                "comments_count&expand=&order_by=" +
+                "&text_format=text&ids=&location=&actual_only=true"
 
     suspend fun getNews(count: Int = 100): List<News> {
         try {
@@ -45,9 +50,7 @@ class KudoService {
                     .body()
             }
             logger.info("информация получена!")
-            return response.results!!.map { news ->
-                news.copy(rating = calculateRating(news.favoritesCount ?: 0, news.commentsCount ?: 0))
-            }
+            return response.results!!
         } catch (e: Exception) {
             logger.error("произошла проблема с запросом")
             return listOf()
@@ -63,20 +66,20 @@ class KudoService {
 
 
     fun saveNews(path: String, news: Collection<News>) {
-        try {
-            val filePath = Paths.get(path)
+        val filePath = Paths.get(path)
 
-            if (!Files.exists(filePath) || !filePath.isReadable()) {
-                logger.warn("Ошибка при работе с файлом: $filePath. Файл либо отсутствует, либо не является читаемым.")
-                return
-            }
-            val csv = news.joinToString("\n") { news ->
-                "\"${news.id}\",\"${news.title}\",\"${news.publicationDate}\",\"${news.slug}\",\"${news.place}\",\"${news.description}\",\"${news.siteUrl}\",\"${news.favoritesCount}\",\"${news.commentsCount}\",\"${news.rating}\""
-            }
-            Files.write(filePath, csv.toByteArray())
+        if (!Files.exists(filePath) || !filePath.isReadable()) {
+            logger.warn("Ошибка при работе с файлом: $filePath. Файл либо отсутствует, либо не является читаемым.")
+            return
+        }
+
+        val csv = news.joinToString("\n") { news ->
+            "\"${news.id}\",\"${news.title}\",\"${news.publicationDate}\",\"${news.slug}\",\"${news.place}\",\"${news.description}\",\"${news.siteUrl}\",\"${news.favoritesCount}\",\"${news.commentsCount}\",\"${news.rating}\""
+        }
+
+        Files.newBufferedWriter(filePath, StandardOpenOption.WRITE).use { writer ->
+            writer.write(csv)
             logger.info("Записано ${news.size} новостей")
-        } catch (e: IOException) {
-            logger.error("Error writing to file: $path", e)
         }
 
     }
@@ -87,9 +90,6 @@ class KudoService {
             LocalDateTime.ofInstant(Instant.ofEpochMilli(timestampInMillis), ZoneId.systemDefault()).toLocalDate()
         return publicationDate
     }
-
-    private fun calculateRating(favoritesCount: Int, commentsCount: Int): Double =
-        1 / (1 + exp(-(favoritesCount.toDouble() / (commentsCount + 1))))
 }
 
 
