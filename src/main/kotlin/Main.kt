@@ -1,7 +1,41 @@
-fun main(args: Array<String>) {
-    println("Hello World!")
+import dsl.html
+import dto.News
+import service.KudoService
+import java.time.LocalDate
 
-    // Try adding program arguments via Run/Debug configuration.
-    // Learn more about running applications: https://www.jetbrains.com/help/idea/running-applications.html.
-    println("Program arguments: ${args.joinToString()}")
+
+suspend fun main(args: Array<String>) {
+
+
+    val kudoService = KudoService()
+    val newsList = kudoService.getNews(75)
+    val period = LocalDate.of(2023, 9, 1)..LocalDate.of(2024, 9, 15)
+    val mostRatedNews = kudoService.getMostRatedNews(20, period, newsList)
+    DSL(mostRatedNews)
+    kudoService.saveNews(("C:\\Users\\danil\\Desktop\\Fintech_kotlin\\src\\main\\resources\\save.csv"), mostRatedNews)
+
 }
+
+private fun DSL(mostRatedNews: List<News>) {
+    val result = html {
+        head {
+            title { +"Result list" }
+        }
+        body {
+
+            p {
+                +"elements of list"
+                ul {
+                    for (newsItem in mostRatedNews) {
+                        li {
+                            +"${newsItem.title}"
+                        }
+                    }
+                }
+            }
+        }
+    }
+    println(result)
+
+}
+
