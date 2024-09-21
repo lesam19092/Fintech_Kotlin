@@ -82,6 +82,7 @@ class KudoService {
             logger.info("Записано ${news.size} новостей")
         }
 
+
     }
 
     private fun localDate(news: News): LocalDate {
