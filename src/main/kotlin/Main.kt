@@ -1,41 +1,57 @@
-import dsl.html
+import client.FileClient
 import dto.News
+import io.ktor.client.call.NoTransformationFoundException
+import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.Channel
 import service.KudoService
-import java.time.LocalDate
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
+fun main(args: Array<String>) {
+    val kudaGoClient = KudoService()
+    val fileClient = FileClient()
+    val countOfThreads: Int = 10
+    val executor = Executors.newFixedThreadPool(countOfThreads)
 
-suspend fun main(args: Array<String>) {
+    fileClient.clearFile("src/main/resources/save.csv")
 
+    val channel = Channel<List<News>>()
 
-    val kudoService = KudoService()
-    val newsList = kudoService.getNews(1000)
-    val period = LocalDate.of(2022, 9, 1)..LocalDate.of(2024, 9, 15)
-    val mostRatedNews = kudoService.getMostRatedNews(77, period, newsList)
-    DSL(mostRatedNews)
-    kudoService.saveNews(("save.csv"), mostRatedNews)
+    val scope = CoroutineScope(Dispatchers.Default)
+    val tasks = (1..countOfThreads).map { i ->
+        scope.launch {
+            try {
+                for (page in 1..20) {
+                    if (page % countOfThreads == i - 1) {
+                        val requestContent = kudaGoClient.getNews(page = page)
 
-}
-
-private fun DSL(mostRatedNews: List<News>) {
-    val result = html {
-        head {
-            title { +"Result list" }
-        }
-        body {
-
-            p {
-                +"elements of list"
-                ul {
-                    for (newsItem in mostRatedNews) {
-                        li {
-                            +"${newsItem.title}"
-                        }
+                        if (!requestContent.isEmpty()) channel.send(requestContent)
                     }
                 }
+            } catch (e: NoTransformationFoundException) {
+                println("Error: ${e.message}")
             }
         }
     }
-    println(result)
 
+    val readerJob = scope.launch {
+        while (true) {
+            val result = channel.receiveCatching().getOrNull()
+            if (result != null) {
+                fileClient.saveNews("src/main/resources/save.csv", result)
+            } else {
+                break
+            }
+        }
+    }
+
+    runBlocking {
+        tasks.forEach { it.join() }
+        channel.close()
+        readerJob.join()
+    }
+
+    executor.shutdown()
+    executor.awaitTermination(1, TimeUnit.HOURS)
+    println("Finished all threads")
 }
-
