@@ -10,16 +10,10 @@ import io.ktor.client.request.*
 import io.ktor.serialization.kotlinx.json.*
 import kotlinx.serialization.json.Json
 import org.slf4j.LoggerFactory
-import java.io.IOException
-import java.nio.file.Files
-import java.nio.file.Paths
-import java.nio.file.StandardOpenOption
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
-import kotlin.io.path.isReadable
-import kotlin.math.exp
 
 class KudoService {
 
@@ -28,32 +22,36 @@ class KudoService {
 
     private val client = HttpClient(CIO) {
         install(ContentNegotiation) {
-            json(Json { ignoreUnknownKeys = true })
+            json(Json {
+                ignoreUnknownKeys = true
+            })
         }
     }
 
     private val baseUrl =
-        "https://kudago.com/public-api/v1.4/" +
-                "news/?fields=id,title,slug," +
-                "description,publication_date,favorites_count," +
-                "comments_count&expand=&order_by=" +
-                "&text_format=text&ids=&location=&actual_only=true"
+        "https://kudago.com/public-api/v1.4/news/" +
+                "?fields=id,title,slug,description,publication_date," +
+                "favorites_count,comments_count&expand=" +
+                "&text_format=text&actual_only=true"
 
-    suspend fun getNews(count: Int = 100): List<News> {
-        try {
-            val response: ApiResponse = client.use {
-                it.get(baseUrl) {
-                    parameter("page_size", count)
-                    parameter("order_by", "-publication_date")
-                    parameter("location", "spb")
-                }
-                    .body()
-            }
-            logger.info("информация получена!")
-            return response.results!!
-        } catch (e: Exception) {
-            logger.error("произошла проблема с запросом")
-            return listOf()
+
+    suspend fun getNews(count: Int = 50, page: Int = 1): List<News> {
+        logger.info("Fetching news: count=$count, page=$page")
+
+        val response = client.get(baseUrl) {
+            parameter("page_size", count)
+            parameter("location", "spb")
+            parameter("order_by", "publication_date")
+            parameter("page", page)
+        }
+
+        if (response.headers["Content-Type"]?.contains("application/json") == true) {
+            val newsResponse: ApiResponse = response.body()
+            logger.debug("Fetched ${newsResponse.results.size} news items")
+            return newsResponse.results
+        } else {
+            logger.warn("Skipped non-JSON response")
+            return emptyList()
         }
     }
 
@@ -64,26 +62,6 @@ class KudoService {
             .take(count)
     }
 
-
-    fun saveNews(path: String, news: Collection<News>) {
-        val filePath = Paths.get(path)
-
-        if (!Files.exists(filePath) || !filePath.isReadable()) {
-            logger.warn("Ошибка при работе с файлом: $filePath. Файл либо отсутствует, либо не является читаемым.")
-            return
-        }
-
-        val csv = news.joinToString("\n") { news ->
-            "\"${news.id}\",\"${news.title}\",\"${news.publicationDate}\",\"${news.slug}\",\"${news.place}\",\"${news.description}\",\"${news.siteUrl}\",\"${news.favoritesCount}\",\"${news.commentsCount}\",\"${news.rating}\""
-        }
-
-        Files.newBufferedWriter(filePath, StandardOpenOption.WRITE).use { writer ->
-            writer.write(csv)
-            logger.info("Записано ${news.size} новостей")
-        }
-
-
-    }
 
     private fun localDate(news: News): LocalDate {
         val timestampInMillis: Long = news.publicationDate * 1000
