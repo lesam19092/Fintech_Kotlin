@@ -9,20 +9,26 @@ import java.util.concurrent.Executors
 import java.util.concurrent.Semaphore
 import java.util.concurrent.TimeUnit
 
+val logger = LoggerFactory.getLogger("Main")
+val kudaGoClient = KudoService()
+val fileClient = FileClient()
+
+
 fun main(args: Array<String>) {
-    val logger = LoggerFactory.getLogger("Main")
     val startTime = System.currentTimeMillis()
     logger.info("Program started")
-
-    val kudaGoClient = KudoService()
-    val fileClient = FileClient()
-    val countOfThreads: Int = 16
-    val executor = Executors.newFixedThreadPool(countOfThreads)
-
     fileClient.clearFile("src/main/resources/save.csv")
 
+
+    val countOfThreads: Int = System.getenv("countOfThreads")?.toInt() ?: 1
+    val executor = Executors.newFixedThreadPool(countOfThreads)
+
+    val maxConcurrentRequests: Int = System.getenv("maxConcurrentRequests")?.toInt() ?: 1
+    val semaphore = Semaphore(maxConcurrentRequests)
+
+
+
     val channel = Channel<List<News>>()
-    val semaphore = Semaphore(2)
 
     val scope = CoroutineScope(Dispatchers.Default)
     val tasks = (1..countOfThreads).map { i ->
@@ -30,7 +36,7 @@ fun main(args: Array<String>) {
             try {
                 for (page in 1..20) {
                     if (page % countOfThreads == i - 1) {
-                        if (semaphore.tryAcquire(30, TimeUnit.SECONDS)) {
+                        if (semaphore.tryAcquire()) {
                             try {
                                 val requestContent = kudaGoClient.getNews(page = page)
                                 if (requestContent.isNotEmpty()) channel.send(requestContent)
@@ -38,7 +44,8 @@ fun main(args: Array<String>) {
                                 semaphore.release()
                             }
                         } else {
-                            logger.warn("API access locked for thread $i, retrying in 30 seconds...")
+                            logger.warn("API access locked for thread $i, retrying in 10 seconds...")
+                            delay(10000)
                         }
                     }
                 }
